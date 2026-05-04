@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Water Tank Dashboard</title>
+    
+    <!-- Firebase SDKs (v8 compat for ease of single-file use) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .dashboard-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 350px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+        
+        /* --- Water Tank Visualizer --- */
+        .tank-container {
+            width: 140px;
+            height: 250px;
+            border: 4px solid #cfd8dc;
+            border-radius: 15px 15px 5px 5px;
+            margin: 0 auto 30px auto;
+            position: relative;
+            background-color: #fafafa;
+            overflow: hidden;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        }
+        .water {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%; /* Controlled by JS */
+            background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
+            transition: height 1s ease-in-out;
+            border-top: 3px solid rgba(255, 255, 255, 0.4);
+        }
+        .water-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+            z-index: 2;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.8);
+        }
+
+        /* --- Round Push Button --- */
+        .motor-control {
+            margin-top: 20px;
+        }
+        p.status-label {
+            margin-bottom: 10px;
+            color: #666;
+            font-weight: 600;
+        }
+        .round-btn {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        .round-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .btn-off {
+            background: radial-gradient(circle, #ff4b4b 0%, #d80000 100%);
+        }
+        .btn-on {
+            background: radial-gradient(circle, #00d25b 0%, #009e44 100%);
+        }
+        
+        #connection-status {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-card">
+        <h2>Water Level Monitor</h2>
+        
+        <!-- Tank Display -->
+        <div class="tank-container">
+            <div class="water-text" id="waterPercentage">--%</div>
+            <div class="water" id="waterLevel"></div>
+        </div>
+
+        <!-- Motor Button -->
+        <div class="motor-control">
+            <p class="status-label">PUMP CONTROL</p>
+            <button id="pumpBtn" class="round-btn btn-off">OFF</button>
+        </div>
+        
+        <div id="connection-status">Connecting to Firebase...</div>
+    </div>
+
+    <script>
+        // 1. YOUR FIREBASE CONFIGURATION
+        const firebaseConfig = {
+            apiKey: "AIzaSyC9kSxaQFABWUXQloc9ezEvOUQ0FUIaN9E",
+            databaseURL: "https://water-tank-27f20-default-rtdb.asia-southeast1.firebasedatabase.app" // Keep https:// here for web
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+
+        // 2. LOG IN
+        const email = "waterlevel@gmail.com";
+        const password = "#@12345";
+
+        auth.signInWithEmailAndPassword(email, password)
+            .then(() => {
+                document.getElementById('connection-status').innerText = "🟢 Connected Securely";
+                startListening();
+            })
+            .catch((error) => {
+                document.getElementById('connection-status').innerText = "🔴 Connection Error";
+                console.error("Login Failed:", error);
+            });
+
+        function startListening() {
+            // Listen for Water Level Changes
+            database.ref('Tank/WaterLevel').on('value', (snapshot) => {
+                let level = snapshot.val();
+                if (level === null) level = 0;
+                
+                // Update UI visually
+                document.getElementById('waterLevel').style.height = level + '%';
+                document.getElementById('waterPercentage').innerText = level + '%';
+            });
+
+            // Listen for Pump Status Changes (Updates button color)
+            database.ref('Tank/PumpStatus').on('value', (snapshot) => {
+                let isPumpOn = snapshot.val();
+                const btn = document.getElementById('pumpBtn');
+                
+                if (isPumpOn === true) {
+                    btn.className = "round-btn btn-on";
+                    btn.innerText = "ON";
+                } else {
+                    btn.className = "round-btn btn-off";
+                    btn.innerText = "OFF";
+                }
+            });
+        }
+
+        // 3. SEND WEB COMMAND TO ESP32
+        document.getElementById('pumpBtn').addEventListener('click', () => {
+            // Tell the ESP32 we want to toggle the pump
+            database.ref('Tank/WebCommandToggle').set(true);
+            
+            // Note: We don't change the button color here. 
+            // We wait for the ESP32 to actually turn on the relay, 
+            // and then the Firebase listener above will change the button color.
+            // This ensures what you see on the screen is exactly what the hardware is doing!
+        });
+    </script>
+</body>
+</html>
