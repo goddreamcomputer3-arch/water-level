@@ -194,7 +194,7 @@
                 if (currentHeartbeat === lastHeartbeat) {
                     // ESP32 IS OFFLINE
                     isDeviceOnline = false;
-                    statusText.innerText = "🔴 ESP32 Offline";
+                    statusText.innerText = "🔴 Device Offline";
                     statusText.style.color = "#ff4b4b";
                     
                     // Lock UI
@@ -208,7 +208,7 @@
                 } else {
                     // ESP32 IS ONLINE
                     isDeviceOnline = true;
-                    statusText.innerText = "🟢 ESP32 Online & Active";
+                    statusText.innerText = "🟢 Device Online & Active";
                     statusText.style.color = "#009e44";
                     
                     // Unlock UI
